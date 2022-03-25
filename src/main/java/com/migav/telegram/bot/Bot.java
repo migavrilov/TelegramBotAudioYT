@@ -105,11 +105,11 @@ public class Bot extends TelegramLongPollingBot {
     public void onUpdateReceived(Update update) {
         try {
             Message message = update.getMessage();
-            songFile = message.getText() + ".mp3";
+            String songName = message.getText().replace(" ", "+");
+            songFile = songName + ".mp3";
 
 
             Long chatId = message.getChatId();
-            String songName = message.getText();
             System.out.println(message.getText());
             downloadSong(songName);
             execute(new SendAudio().setChatId(chatId).setAudio(new File(songFile)));
