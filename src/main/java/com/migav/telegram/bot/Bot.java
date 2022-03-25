@@ -105,6 +105,9 @@ public class Bot extends TelegramLongPollingBot {
     public void onUpdateReceived(Update update) {
         try {
             Message message = update.getMessage();
+            if (message.getText().startsWith("/")) {
+                return;
+            }
             String songName = message.getText().replace(" ", "+");
             songFile = songName + ".mp3";
 
