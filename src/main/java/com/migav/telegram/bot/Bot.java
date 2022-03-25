@@ -1,9 +1,13 @@
 package com.migav.telegram.bot;
 
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mashape.unirest.http.HttpResponse;
+import com.mashape.unirest.http.Unirest;
+import com.mashape.unirest.http.exceptions.UnirestException;
 import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
+import org.apache.http.HttpRequest;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
@@ -23,11 +27,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.io.*;
 import java.net.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
-import java.util.concurrent.TimeUnit;
 
 // Аннотация @Component необходима, чтобы наш класс распознавался Spring, как полноправный Bean
 @Component
@@ -40,7 +40,6 @@ public class Bot extends TelegramLongPollingBot {
     @Value("${bot.token}")
     private String botToken;
 
-    private String songLoaderUrl = "https://econtools.ru/bots/audio.mp3";
     private String songFile = "audio.mp3";
 
     /* Перегружаем метод интерфейса LongPollingBot
@@ -72,15 +71,24 @@ public class Bot extends TelegramLongPollingBot {
         return rootNode.get("items").get(0).get("id").get("videoId").asText();
     }
 
-    public void downloadSong(String songName) throws IOException, InterruptedException {
+    public String getSongUrl(String songId) throws UnirestException, IOException {
+        HttpResponse<String> response = Unirest.get("https://youtube-mp36.p.rapidapi.com/dl?id=" + songId)
+                .header("X-RapidAPI-Host", "youtube-mp36.p.rapidapi.com")
+                .header("X-RapidAPI-Key", "f5c9c95bb0msh7813baf09ef6f37p19f162jsn1ed0bc9b9383")
+                .asString();
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode rootNode = mapper.readTree(response.getBody());
+
+        return rootNode.get("link").asText();
+
+    }
+
+
+    public void downloadSong(String songName) throws IOException, InterruptedException, UnirestException {
         String songId = getSongIdByName(songName);
 
-        URL url = new URL("https://econtools.ru/bots/yttomp3.php?id=" + songId);
-        URLConnection con = url.openConnection();
-        HttpURLConnection http = (HttpURLConnection)con;
-        http.setRequestMethod("POST"); // PUT is another valid option
-        http.setDoOutput(true);
-
+        String songLoaderUrl = getSongUrl(songId);
         try (BufferedInputStream in = new BufferedInputStream(new URL(songLoaderUrl).openStream());
              FileOutputStream fileOutputStream = new FileOutputStream(songFile)) {
             byte dataBuffer[] = new byte[1024];
@@ -92,7 +100,6 @@ public class Bot extends TelegramLongPollingBot {
             // handle exception
         }
         System.out.println("Audio was downloaded");
-        ((HttpURLConnection) con).disconnect();
     }
     @Override
     public void onUpdateReceived(Update update) {
@@ -108,7 +115,7 @@ public class Bot extends TelegramLongPollingBot {
             execute(new SendAudio().setChatId(chatId).setAudio(new File(songFile)));
 
 
-        } catch (TelegramApiException | IOException | InterruptedException e) {
+        } catch (TelegramApiException | IOException | InterruptedException | UnirestException e) {
             e.printStackTrace();
         }
         new File(songFile).delete();
