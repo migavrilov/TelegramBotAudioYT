@@ -76,6 +76,10 @@ public class Bot extends TelegramLongPollingBot {
                 .header("X-RapidAPI-Host", "youtube-mp36.p.rapidapi.com")
                 .header("X-RapidAPI-Key", "f5c9c95bb0msh7813baf09ef6f37p19f162jsn1ed0bc9b9383")
                 .asString();
+//        HttpResponse<String> response = Unirest.get("https://youtube-mp3-download1.p.rapidapi.com/dl?id=UxxajLWwzqY")
+//                .header("X-RapidAPI-Host", "youtube-mp3-download1.p.rapidapi.com")
+//                .header("X-RapidAPI-Key", "f5c9c95bb0msh7813baf09ef6f37p19f162jsn1ed0bc9b9383")
+//                .asString();
 
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(response.getBody());
@@ -89,7 +93,10 @@ public class Bot extends TelegramLongPollingBot {
         String songId = getSongIdByName(songName);
 
         String songLoaderUrl = getSongUrl(songId);
-        try (BufferedInputStream in = new BufferedInputStream(new URL(songLoaderUrl).openStream());
+        HttpResponse<InputStream> response = Unirest.get(songLoaderUrl).asBinary();
+        InputStream stream = response.getBody();
+
+        try (BufferedInputStream in = new BufferedInputStream(stream);
              FileOutputStream fileOutputStream = new FileOutputStream(songFile)) {
             byte dataBuffer[] = new byte[1024];
             int bytesRead;
