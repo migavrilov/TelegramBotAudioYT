@@ -10,14 +10,14 @@
 
     <properties>
         <java.version>8</java.version>
-        <telegrambots-spring.version>0.22</telegrambots-spring.version>
+        <telegrambots-spring.version>0.20</telegrambots-spring.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>com.github.xabgesagtx</groupId>
             <artifactId>telegram-spring-boot-starter</artifactId>
-            <version>0.22</version>
+            <version>0.20</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
