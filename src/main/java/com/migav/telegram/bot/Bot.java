@@ -1,6 +1,7 @@
 package com.migav.telegram.bot;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mashape.unirest.http.HttpResponse;
@@ -27,6 +28,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.io.*;
 import java.net.*;
 
+import java.time.Duration;
 import java.util.Scanner;
 
 // Аннотация @Component необходима, чтобы наш класс распознавался Spring, как полноправный Bean
@@ -59,10 +61,21 @@ public class Bot extends TelegramLongPollingBot {
         }
         return content;
     }
+    public Long getSongDuration(String songId) throws JsonProcessingException {
+        String urlApi = "https://youtube.googleapis.com/youtube/v3/videos?part=contentDetails&key=" +
+            "AIzaSyA16HZgMgo30DsjZpXT3AsPyHr1YNF5PdA&id=" + songId;
+
+        String resultJson = getHTMLFromUrl(urlApi);
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode rootNode = mapper.readTree(resultJson);
+
+        String duration = rootNode.get("items").get(0).get("contentDetails").get("duration").asText();
+        return Duration.parse(duration).getSeconds();
+    }
 
     public String getSongIdByName(String songName) throws IOException {
         String songUrlApi = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video" +
-                "&key=AIzaSyA16HZgMgo30DsjZpXT3AsPyHr1YNF5PdA&maxResults=1&q=" + songName;
+                "&key=AIzaSyA16HZgMgo30DsjZpXT3AsPyHr1YNF5PdA&maxResults=1&q=" + songName.replaceAll(" ", "+");
 
         String resultJson = getHTMLFromUrl(songUrlApi);
         ObjectMapper mapper = new ObjectMapper();
@@ -88,8 +101,66 @@ public class Bot extends TelegramLongPollingBot {
 
     }
 
+    public String loadSong(String url) throws IOException, InterruptedException {
+        String command = "/Library/Frameworks/Python.framework" +
+                "/Versions/3.9/bin/youtube-dl" + " --extract-audio --audio-format mp3 --audio-quality 256K '" +
+                url + "'";
+        Process process = Runtime.getRuntime().exec(new String[]{"sh", "-c", command}, null, null);
+        StringBuilder output = new StringBuilder();
 
-    public void downloadSong(String songName) throws IOException, InterruptedException, UnirestException {
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream()));
+
+        String line;
+        while ((line = reader.readLine()) != null) {
+            output.append(line + "\n");
+        }
+
+        int exitVal = process.waitFor();
+        String res = output.toString();
+        String fileName = res.split("Destination: ")[1].split("\n")[0];
+        return fileName;
+    }
+
+    public String convertToMp3(String fileName) throws IOException, InterruptedException {
+        String command = "/Library/Frameworks/Python.framework/Versions/3.9/bin/ffmpeg -i '" + fileName + "' -b:a 256k '" + fileName.split("\\.")[0] + ".mp3'";
+
+        Process process = Runtime.getRuntime().exec(new String[]{"sh", "-c", command}, null, null);
+
+        int exitVal = process.waitFor();
+        int len;
+        if ((len = process.getErrorStream().available()) > 0) {
+            byte[] buf = new byte[len];
+            process.getErrorStream().read(buf);
+            System.err.println("Command error:\t\""+new String(buf)+"\"");
+        }
+        new File(fileName).delete();
+        System.out.println(exitVal);
+        fileName = fileName.split("\\.")[0] + ".mp3";
+        System.out.println(fileName);
+        return fileName;
+    }
+
+
+    public String downloadSong(String songName) throws IOException, InterruptedException {
+        String songId = getSongIdByName(songName);
+
+        long duration = getSongDuration(songId);
+        System.out.println(duration);
+        if (duration > 15 * 60) {
+            return "0";
+        }
+        String url = "https://youtube.com/watch?v=" + songId;
+
+        String fileName = loadSong(url);
+        //String fileName = "Glass Animals - Heat Waves (Official Video)-mRD0-GxqHVo.webm";
+        fileName = convertToMp3(fileName);
+
+        return fileName;
+    }
+
+
+    public void downloadSongOld(String songName) throws IOException, InterruptedException, UnirestException {
         String songId = getSongIdByName(songName);
 
         String songLoaderUrl = getSongUrl(songId);
@@ -115,21 +186,25 @@ public class Bot extends TelegramLongPollingBot {
             if (message.getText().startsWith("/")) {
                 return;
             }
-            String songName = message.getText().replace(" ", "+");
-            songFile = songName + ".mp3";
 
+            String songName = message.getText();
 
             Long chatId = message.getChatId();
             System.out.println(message.getText());
-            downloadSong(songName);
-            execute(new SendAudio().setChatId(chatId).setAudio(new File(songFile)));
+            songFile = downloadSong(songName);
+            if (songFile != "0") {
+                execute(new SendAudio().setChatId(chatId).setAudio(new File(songFile)));
+            } else {
+                execute(new SendMessage().setChatId(chatId).setText("The file exceeds duration limit"));
+            }
 
-
-        } catch (TelegramApiException | IOException | InterruptedException | UnirestException e) {
+        } catch (TelegramApiException | IOException | InterruptedException e) {
             e.printStackTrace();
         }
-        new File(songFile).delete();
-        System.out.println("Audio was sent");
+        if (songFile != "0") {
+            new File(songFile).delete();
+            System.out.println("Audio was sent");
+        }
     }
 
     // Геттеры, которые необходимы для наследования от TelegramLongPollingBot
