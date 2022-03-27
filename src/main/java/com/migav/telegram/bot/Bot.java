@@ -25,9 +25,12 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.awt.*;
 import java.io.*;
 import java.net.*;
 
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
 import java.time.Duration;
 import java.util.Scanner;
 
@@ -85,15 +88,14 @@ public class Bot extends TelegramLongPollingBot {
     }
 
     public String getSongUrl(String songId) throws UnirestException, IOException {
-        HttpResponse<String> response = Unirest.get("https://youtube-mp36.p.rapidapi.com/dl?id=" + songId)
-                .header("X-RapidAPI-Host", "youtube-mp36.p.rapidapi.com")
+        HttpResponse<String> response = Unirest.get("https://youtube-mp3-download1.p.rapidapi.com/dl?id="+songId)
+                .header("X-RapidAPI-Host", "youtube-mp3-download1.p.rapidapi.com")
                 .header("X-RapidAPI-Key", "f5c9c95bb0msh7813baf09ef6f37p19f162jsn1ed0bc9b9383")
                 .asString();
 //        HttpResponse<String> response = Unirest.get("https://youtube-mp3-download1.p.rapidapi.com/dl?id=UxxajLWwzqY")
 //                .header("X-RapidAPI-Host", "youtube-mp3-download1.p.rapidapi.com")
 //                .header("X-RapidAPI-Key", "f5c9c95bb0msh7813baf09ef6f37p19f162jsn1ed0bc9b9383")
 //                .asString();
-
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(response.getBody());
 
@@ -103,7 +105,7 @@ public class Bot extends TelegramLongPollingBot {
 
     public String loadSong(String url) throws IOException, InterruptedException {
         String command = "/Library/Frameworks/Python.framework" +
-                "/Versions/3.9/bin/youtube-dl" + " --extract-audio --audio-format mp3 --audio-quality 256K '" +
+                "/Versions/3.9/bin/yt-dlp" + " --extract-audio --audio-format mp3 --audio-quality 256K '" +
                 url + "'";
         Process process = Runtime.getRuntime().exec(new String[]{"sh", "-c", command}, null, null);
         StringBuilder output = new StringBuilder();
@@ -160,24 +162,33 @@ public class Bot extends TelegramLongPollingBot {
     }
 
 
-    public void downloadSongOld(String songName) throws IOException, InterruptedException, UnirestException {
+    public String downloadSongOld(String songName) throws IOException, InterruptedException, UnirestException, URISyntaxException {
         String songId = getSongIdByName(songName);
 
         String songLoaderUrl = getSongUrl(songId);
+        long duration = getSongDuration(songId);
+        System.out.println(duration);
+        if (duration > 15 * 60) {
+            return "0";
+        }
         HttpResponse<InputStream> response = Unirest.get(songLoaderUrl).asBinary();
         InputStream stream = response.getBody();
 
         try (BufferedInputStream in = new BufferedInputStream(stream);
              FileOutputStream fileOutputStream = new FileOutputStream(songFile)) {
-            byte dataBuffer[] = new byte[1024];
+            byte[] dataBuffer = new byte[1024];
             int bytesRead;
             while ((bytesRead = in.read(dataBuffer, 0, 1024)) != -1) {
                 fileOutputStream.write(dataBuffer, 0, bytesRead);
             }
         } catch (IOException e) {
-            // handle exception
+            System.out.println(e.getMessage());
         }
+
+        System.out.println(songLoaderUrl);
+
         System.out.println("Audio was downloaded");
+        return "ok";
     }
     @Override
     public void onUpdateReceived(Update update) {
@@ -187,24 +198,25 @@ public class Bot extends TelegramLongPollingBot {
                 return;
             }
 
-            String songName = message.getText();
+            String songName = message.getText().replace(" ", "+");
+            songFile = songName + ".mp3";
 
             Long chatId = message.getChatId();
             System.out.println(message.getText());
-            songFile = downloadSong(songName);
-            if (songFile != "0") {
+            String res = downloadSongOld(songName);
+            if (res != "0") {
                 execute(new SendAudio().setChatId(chatId).setAudio(new File(songFile)));
             } else {
                 execute(new SendMessage().setChatId(chatId).setText("The file exceeds duration limit"));
             }
 
-        } catch (TelegramApiException | IOException | InterruptedException e) {
+        } catch (TelegramApiException | IOException | InterruptedException | UnirestException | URISyntaxException e) {
             e.printStackTrace();
         }
-        if (songFile != "0") {
-            new File(songFile).delete();
-            System.out.println("Audio was sent");
-        }
+
+            //new File(songFile).delete();
+        System.out.println("Audio was sent");
+
     }
 
     // Геттеры, которые необходимы для наследования от TelegramLongPollingBot
