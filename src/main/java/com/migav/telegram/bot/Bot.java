@@ -83,11 +83,11 @@ public class Bot extends TelegramLongPollingBot {
         String resultJson = getHTMLFromUrl(songUrlApi);
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(resultJson);
-        System.out.println(rootNode.get("items").get(0).get("id").get("videoId").asText());
+        System.out.println(rootNode.get("items").get(0).get("id").get("videoId").asText() + " - id");
         return rootNode.get("items").get(0).get("id").get("videoId").asText();
     }
 
-    public String getSongUrl(String songId) throws UnirestException, IOException {
+    public String getSongUrlOld(String songId) throws UnirestException, IOException {
         HttpResponse<String> response = Unirest.get("https://youtube-mp3-download1.p.rapidapi.com/dl?id="+songId)
                 .header("X-RapidAPI-Host", "youtube-mp3-download1.p.rapidapi.com")
                 .header("X-RapidAPI-Key", "f5c9c95bb0msh7813baf09ef6f37p19f162jsn1ed0bc9b9383")
@@ -161,16 +161,46 @@ public class Bot extends TelegramLongPollingBot {
         return fileName;
     }
 
+    public String getSongUrl(String songId) throws IOException, UnirestException {
 
-    public String downloadSongOld(String songName) throws IOException, InterruptedException, UnirestException, URISyntaxException {
+        HttpResponse<String> response = Unirest.get("https://youtube-mp3-download1.p.rapidapi.com/dl?id="+songId)
+                .header("X-RapidAPI-Host", "youtube-mp3-download1.p.rapidapi.com")
+                .header("X-RapidAPI-Key", "f5c9c95bb0msh7813baf09ef6f37p19f162jsn1ed0bc9b9383")
+                .asString();
+
+        String res = response.getBody();
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode node = mapper.readTree(res);
+        String rawLink = node.get("link").asText();
+
+        HttpResponse<String> response2 = Unirest.get(rawLink).asString();
+        res = response2.getBody();
+        res = res.split("<script async>")[1];
+        int start = res.indexOf("[");
+        int end = res.indexOf("]") + 1;
+        res = res.substring(start, end);
+
+        JsonNode codes = mapper.readTree(res);
+        int offset = codes.get(0).asInt() - 60;
+        String directLink = "";
+        for (int i = 21; i < codes.size() - 15; i++) {
+            directLink += (char)(codes.get(i).asInt() - offset);
+        }
+        System.out.println(directLink);
+        return directLink;
+    }
+
+
+    public String downloadSongNew(String songName) throws IOException, UnirestException, URISyntaxException {
         String songId = getSongIdByName(songName);
-
-        String songLoaderUrl = getSongUrl(songId);
         long duration = getSongDuration(songId);
         System.out.println(duration);
         if (duration > 15 * 60) {
             return "0";
         }
+        String songLoaderUrl = getSongUrl(songId);
+
+
         HttpResponse<InputStream> response = Unirest.get(songLoaderUrl).asBinary();
         InputStream stream = response.getBody();
 
@@ -185,7 +215,7 @@ public class Bot extends TelegramLongPollingBot {
             System.out.println(e.getMessage());
         }
 
-        System.out.println(songLoaderUrl);
+        //System.out.println(songLoaderUrl);
 
         System.out.println("Audio was downloaded");
         return "ok";
@@ -203,18 +233,18 @@ public class Bot extends TelegramLongPollingBot {
 
             Long chatId = message.getChatId();
             System.out.println(message.getText());
-            String res = downloadSongOld(songName);
+            String res = downloadSongNew(songName);
             if (res != "0") {
                 execute(new SendAudio().setChatId(chatId).setAudio(new File(songFile)));
             } else {
                 execute(new SendMessage().setChatId(chatId).setText("The file exceeds duration limit"));
             }
 
-        } catch (TelegramApiException | IOException | InterruptedException | UnirestException | URISyntaxException e) {
+        } catch (TelegramApiException | IOException | UnirestException | URISyntaxException e) {
             e.printStackTrace();
         }
 
-            //new File(songFile).delete();
+        new File(songFile).delete();
         System.out.println("Audio was sent");
 
     }
