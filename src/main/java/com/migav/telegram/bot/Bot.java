@@ -56,7 +56,7 @@ public class Bot extends TelegramLongPollingBot {
 
     private ArrayList<ArrayList<String>> recentUsers = new ArrayList<>();
 
-    private Long chatIdNow = (long) 0;
+    private String chatIdNow = "";
     private boolean forward = false;
     /* Перегружаем метод интерфейса LongPollingBot
     Теперь при получении сообщения наш бот будет отвечать сообщением Hi!
@@ -77,16 +77,29 @@ public class Bot extends TelegramLongPollingBot {
             Message channelPost = update.getChannelPost();
             Message message = update.getMessage();
             if (message != null) {
-                while (chatIdNow != 0) Thread.sleep(10);
+                while (!chatIdNow.equals("")) Thread.sleep(10);
+                Long chatId = message.getChatId();
+                removeOldUsers();
+                for (int i = 0; i < recentUsers.size(); i++) {
+                    if (chatId == Long.parseLong(recentUsers.get(i).get(0))) {
+                        execute(new SendMessage().setChatId(chatId).setText("You are not allowed to send more that one request per 5 seconds. Sorry."));
+                        return;
+                    }
+
+                }
                 String songId = SongLoader.getSongIdByName(message.getText() + " official audio");
                 String songUrl = "https://youtube.com/watch?v=" + songId;
                 Process process = Runtime.getRuntime().exec(
                         "/Library/Frameworks/Python.framework/Versions/3.9/bin/python3 download_song.py '" + songUrl + "'", null, null);
 
-                chatIdNow = message.getChatId();
+                chatIdNow = message.getChatId().toString();
             } else if (channelPost != null) {
                 forward = true;
                 String from = "-1001608346356";
+                ArrayList<String> newUser = new ArrayList<>();
+                newUser.add(chatIdNow);
+                newUser.add(String.valueOf(Instant.now().toEpochMilli()));
+                recentUsers.add(newUser);
                 execute(new ForwardMessage().setFromChatId(from).setChatId(chatIdNow).setMessageId(channelPost.getMessageId()));
             }
 //            if (message.getText() != null && message.getText().startsWith("/")) {
@@ -95,16 +108,6 @@ public class Bot extends TelegramLongPollingBot {
 
 
 
-
-//            Long chatId = message.getChatId();
-//            removeOldUsers();
-//            for (int i = 0; i < recentUsers.size(); i++) {
-//                if (chatId == Long.parseLong(recentUsers.get(i).get(0))) {
-//                    execute(new SendMessage().setChatId(chatId).setText("You are not allowed to send more that one request per 5 seconds. Sorry."));
-//                    return;
-//                }
-//
-//            }
 //
 //            String songName = (message.getText() + " official audio");
 //            songFile = songName + ".mp3";
@@ -128,7 +131,7 @@ public class Bot extends TelegramLongPollingBot {
         }
 
         if (forward) {
-            chatIdNow = (long) 0;
+            chatIdNow = "";
             forward = false;
         }
 //
