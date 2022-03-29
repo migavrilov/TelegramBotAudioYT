@@ -31,6 +31,7 @@ import java.net.*;
 
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -73,7 +74,7 @@ public class Bot extends TelegramLongPollingBot {
     }
     public Long getSongDuration(String songId) throws JsonProcessingException {
         String urlApi = "https://youtube.googleapis.com/youtube/v3/videos?part=contentDetails&key=" +
-            "AIzaSyA16HZgMgo30DsjZpXT3AsPyHr1YNF5PdA&id=" + songId;
+                "AIzaSyA16HZgMgo30DsjZpXT3AsPyHr1YNF5PdA&id=" + songId;
 
         String resultJson = getHTMLFromUrl(urlApi);
         ObjectMapper mapper = new ObjectMapper();
@@ -85,13 +86,29 @@ public class Bot extends TelegramLongPollingBot {
 
     public String getSongIdByName(String songName) throws IOException {
         String songUrlApi = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video" +
-                "&key=AIzaSyA16HZgMgo30DsjZpXT3AsPyHr1YNF5PdA&maxResults=1&q=" + songName.replaceAll(" ", "+");
-
+                "&key=AIzaSyA16HZgMgo30DsjZpXT3AsPyHr1YNF5PdA&regionCode=US&topicId=/m/04rlf&maxResults=5&q=" + URLEncoder.encode(songName, StandardCharsets.UTF_8.toString());
+        //&regionCode=US&topicId=/m/04rlf
         String resultJson = getHTMLFromUrl(songUrlApi);
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(resultJson);
-        System.out.println(rootNode.get("items").get(0).get("id").get("videoId").asText() + " - id");
-        return rootNode.get("items").get(0).get("id").get("videoId").asText();
+        if (songName.toLowerCase().contains("remix") || songName.toLowerCase().contains("ремикс")) {
+            System.out.println(rootNode.get("items").get(0).get("id").get("videoId").asText() + " - id");
+            return rootNode.get("items").get(0).get("id").get("videoId").asText();
+        } else {
+            int resId = 0;
+            for (int i = 0; i < 5; i++) {
+                String title = rootNode.get("items").get(i).get("snippet").get("title").asText();
+                if (!title.toLowerCase().contains("remix") && !title.toLowerCase().contains("ремикс") &&
+                        !title.contains("8D")) {
+                    resId = i;
+                    break;
+                }
+            }
+
+            System.out.println(rootNode.get("items").get(resId).get("id").get("videoId").asText() + " - id");
+            return rootNode.get("items").get(resId).get("id").get("videoId").asText();
+        }
+
     }
 
     public String getSongUrlOld(String songId) throws UnirestException, IOException {
@@ -251,13 +268,13 @@ public class Bot extends TelegramLongPollingBot {
             for (int i = 0; i < toRemove.size(); i++) recentUsers.remove(toRemove.get(i).intValue());
             for (int i = 0; i < recentUsers.size(); i++) {
                 if (chatId == Long.parseLong(recentUsers.get(i).get(0))) {
-                    execute(new SendMessage().setChatId(chatId).setText("You are not allowed to send more that one request in 5 seconds. Sorry."));
+                    execute(new SendMessage().setChatId(chatId).setText("You are not allowed to send more that one request per 5 seconds. Sorry."));
                     return;
                 }
 
             }
 
-            String songName = (message.getText() + " audio").replace(" ", "+");
+            String songName = (message.getText() + " official audio");
             songFile = songName + ".mp3";
 
             System.out.println(message.getText());
