@@ -20,7 +20,8 @@ import java.util.concurrent.TimeUnit;
 
 public class SongLoader {
 
-
+    private static String youtubeApiKey = "";
+    private static String rapidApiKey = "";
 
     public static String getHTMLFromUrl(String url) {
         String content = null;
@@ -38,7 +39,7 @@ public class SongLoader {
     }
     public static Long getSongDuration(String songId) throws JsonProcessingException {
         String urlApi = "https://youtube.googleapis.com/youtube/v3/videos?part=contentDetails&key=" +
-                "AIzaSyA16HZgMgo30DsjZpXT3AsPyHr1YNF5PdA&id=" + songId;
+                youtubeApiKey +  "&id=" + songId;
 
         String resultJson = getHTMLFromUrl(urlApi);
         ObjectMapper mapper = new ObjectMapper();
@@ -50,7 +51,7 @@ public class SongLoader {
 
     public static String getSongIdByName(String songName) throws IOException {
         String songUrlApi = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video" +
-                "&key=AIzaSyA16HZgMgo30DsjZpXT3AsPyHr1YNF5PdA&regionCode=US&topicId=/m/04rlf&maxResults=5&q=" + URLEncoder.encode(songName, StandardCharsets.UTF_8.toString());
+                "&key=" + youtubeApiKey + "&regionCode=US&topicId=/m/04rlf&maxResults=5&q=" + URLEncoder.encode(songName, StandardCharsets.UTF_8.toString());
         //&regionCode=US&topicId=/m/04rlf
         String resultJson = getHTMLFromUrl(songUrlApi);
         ObjectMapper mapper = new ObjectMapper();
@@ -82,7 +83,7 @@ public class SongLoader {
         while (rawLink == "") {
             HttpResponse<String> response = Unirest.get("https://youtube-mp3-download1.p.rapidapi.com/dl?id=" + songId)
                     .header("X-RapidAPI-Host", "youtube-mp3-download1.p.rapidapi.com")
-                    .header("X-RapidAPI-Key", "f5c9c95bb0msh7813baf09ef6f37p19f162jsn1ed0bc9b9383")
+                    .header("X-RapidAPI-Key", rapidApiKey)
                     .asString();
 
             res = response.getBody();
